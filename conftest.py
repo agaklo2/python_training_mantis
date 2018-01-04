@@ -1,7 +1,8 @@
 import pytest
 import json
 import os.path
-from fixture.application import Application
+from fixtures.application import Application
+from fixtures.db import DbFixture
 
 fixture = None
 target = None
@@ -16,30 +17,35 @@ def load_config(file):
     return target
 
 
+@pytest.fixture(scope="session")
+def config(request):
+    return load_config(request.config.getoption("--target"))
+
 @pytest.fixture
-def app(request):
+def app(request, config):
     global fixture
     browser = request.config.getoption("--browser")
     web_config = load_config(request.config.getoption("--target"))['web']
     if fixture is None or not fixture.is_valid():
         fixture = Application(browser=browser, base_url=web_config['baseUrl'])
+    fixture.session.ensure_login(username=config["webadmin"]["username"], password=config["webadmin"]["password"])
     return fixture
 
 
 @pytest.fixture(scope="session", autouse=True)
-def orm(request):
+def db(request):
     db_config = load_config(request.config.getoption("--target"))['db']
-    ormfixture = ORMFixture(host=db_config['host'], name=db_config['name'], user=db_config['user'], password=db_config['password'])
+    dbfixture = DbFixture(host=db_config['host'], name=db_config['name'], user=db_config['user'], password=db_config['password'])
     def fin():
         pass
     request.addfinalizer(fin)
-    return ormfixture
+    return dbfixture
 
 
 @pytest.fixture(scope="session", autouse=True)
 def stop(request):
     def fin():
-        fixture.session.ensure_logout()
+#        fixture.session.ensure_logout()
         fixture.destroy()
     request.addfinalizer(fin)
     return fixture
